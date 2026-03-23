@@ -1,6 +1,6 @@
 [project]
 name = "ableton-mcp"
-version = "1.1.0"
+version = "1.1.1"
 description = "Ableton Live integration through the Model Context Protocol with structured session-editing tools"
 readme = "README.md"
 requires-python = ">=3.10"
