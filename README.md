@@ -9,18 +9,18 @@ Give feedback, get inspired, and build on top of the MCP: [Discord](https://disc
 
 ## Features
 
-- **Two-way communication**: Connect Claude AI to Ableton Live through a socket-based server
-- **Track manipulation**: Create, modify, and manipulate MIDI and audio tracks
-- **Instrument and effect selection**: Claude can access and load the right instruments, effects and sounds from Ableton's library
-- **Clip creation**: Create and edit MIDI clips with notes
-- **Session control**: Start and stop playback, fire clips, and control transport
+- **Structured MCP tools**: Every tool returns `ok`, `error`, `object_type`, `object_ref`, and `state`
+- **Deeper session control**: Inspect tracks, scenes, clip slots, devices, parameters, and transport state
+- **Production editing workflows**: Create, rename, duplicate, delete, launch, and stop tracks, scenes, and clips
+- **Mixer and device control**: Adjust arm, mute, solo, volume, pan, sends, tempo, metronome, and device parameters
+- **Safer destructive changes**: Track, scene, clip, and device removals require `confirm_destructive=true`
 
 ## Components
 
 The system consists of two main components:
 
-1. **Ableton Remote Script** (`Ableton_Remote_Script/__init__.py`): A MIDI Remote Script for Ableton Live that creates a socket server to receive and execute commands
-2. **MCP Server** (`server.py`): A Python server that implements the Model Context Protocol and connects to the Ableton Remote Script
+1. **Ableton Remote Script** (`AbletonMCP_Remote_Script/__init__.py`): A MIDI Remote Script for Ableton Live that exposes a newline-delimited JSON socket bridge
+2. **MCP Server** (`MCP_Server/server.py`): A Python MCP server that exposes explicit Ableton tools and forwards them to the Remote Script
 
 ## Installation
 
@@ -35,7 +35,7 @@ npx -y @smithery/cli install @ahujasid/ableton-mcp --client claude
 ### Prerequisites
 
 - Ableton Live 10 or newer
-- Python 3.8 or newer
+- Python 3.10 or newer
 - [uv package manager](https://astral.sh/uv)
 
 If you're on Mac, please install uv as:
@@ -123,13 +123,13 @@ Once the config file has been set on Claude, and the remote script is running in
 
 ## Capabilities
 
-- Get session and track information
-- Create and modify MIDI and audio tracks
-- Create, edit, and trigger clips
-- Control playback
-- Load instruments and effects from Ableton's browser
-- Add notes to MIDI clips
-- Change tempo and other session parameters
+- Inspect transport, selections, tracks, scenes, clip slots, devices, and parameters
+- Create MIDI and audio tracks plus session clips
+- Rename and recolor tracks, scenes, and clips
+- Launch and stop scenes and clips
+- Duplicate and delete tracks, scenes, clips, and devices with explicit confirmation
+- Adjust track arm, mute, solo, volume, pan, sends, tempo, metronome, and device parameters
+- Add MIDI notes and update clip loop boundaries
 
 ## Example Commands
 
@@ -137,14 +137,14 @@ Here are some examples of what you can ask Claude to do:
 
 - "Create an 80s synthwave track" [Demo](https://youtu.be/VH9g66e42XA)
 - "Create a Metro Boomin style hip-hop beat"
-- "Create a new MIDI track with a synth bass instrument"
-- "Add reverb to my drums"
-- "Create a 4-bar MIDI clip with a simple melody"
-- "Get information about the current Ableton session"
-- "Load a 808 drum rack into the selected track"
-- "Add a jazz chord progression to the clip in track 1"
-- "Set the tempo to 120 BPM"
-- "Play the clip in track 2"
+- "Show me all tracks, devices on track 2, and the parameters on device 0"
+- "Create a new MIDI track named Bassline, arm it, and set its volume to -6 dB"
+- "Create a 4-bar MIDI clip on track 1 slot 0 and add a simple melody"
+- "Duplicate scene 3 with confirmation and launch the new scene"
+- "Rename clip slot 1 on track 2 to Intro Hook and set its loop from 0 to 8 bars"
+- "Turn the metronome on and set the tempo to 120 BPM"
+- "Set device parameter 5 on track 0 device 1 to 0.65"
+- "Delete track 4 with confirmation"
 
 
 ## Troubleshooting
@@ -159,14 +159,14 @@ Here are some examples of what you can ask Claude to do:
 
 The system uses a simple JSON-based protocol over TCP sockets:
 
-- Commands are sent as JSON objects with a `type` and optional `params`
-- Responses are JSON objects with a `status` and `result` or `message`
+- Commands are sent as newline-delimited JSON objects with a `type` and `params`
+- Responses are newline-delimited JSON objects with `ok`, `error`, `object_type`, `object_ref`, and `state`
 
 ### Limitations & Security Considerations
 
-- Creating complex musical arrangements might need to be broken down into smaller steps
-- The tool is designed to work with Ableton's default devices and browser items
-- Always save your work before extensive experimentation
+- This version is optimized for one local Ableton install rather than broad Live-version compatibility
+- The tool focuses on session view, mixer, and device workflows; arrangement editing and browser import are not part of this pass
+- Always save your Live Set before extensive experimentation
 
 ## Contributing
 
