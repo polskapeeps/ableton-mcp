@@ -939,6 +939,7 @@ class AbletonMCP(ControlSurface):
             "name": name,
             "original_name": self._safe_attr(parameter, "original_name", name),
             "value": current_value,
+            "display_value": self._safe_parameter_display_value(parameter, current_value),
             "default_value": default_value,
             "has_default_value": has_default_value,
             "min": self._safe_number(self._safe_attr(parameter, "min", 0.0)),
@@ -1289,3 +1290,9 @@ class AbletonMCP(ControlSurface):
             return list(raw_value_items or [])
         except Exception:
             return []
+
+    def _safe_parameter_display_value(self, parameter, value):
+        try:
+            return parameter.str_for_value(value)
+        except Exception:
+            return str(value)
