@@ -440,14 +440,14 @@ class AbletonMCP(ControlSurface):
         track_index = self._require_int(params, "track_index")
         value = float(self._require_value(params, "value"))
         track = self._require_track(track_index)
-        self._set_parameter(track.mixer_device.volume, value)
+        self._set_parameter(track.mixer_device.volume, value=value)
         return self._ok("track", {"track_index": track_index}, self._track_state(track, track_index))
 
     def _cmd_track_set_pan(self, params):
         track_index = self._require_int(params, "track_index")
         value = float(self._require_value(params, "value"))
         track = self._require_track(track_index)
-        self._set_parameter(track.mixer_device.panning, value)
+        self._set_parameter(track.mixer_device.panning, value=value)
         return self._ok("track", {"track_index": track_index}, self._track_state(track, track_index))
 
     def _cmd_track_set_send(self, params):
@@ -459,7 +459,7 @@ class AbletonMCP(ControlSurface):
         if send_index < 0 or send_index >= len(track.mixer_device.sends):
             raise AbletonMCPError("invalid_index", "Send index out of range")
 
-        self._set_parameter(track.mixer_device.sends[send_index], value)
+        self._set_parameter(track.mixer_device.sends[send_index], value=value)
         return self._ok("track", {"track_index": track_index}, self._track_state(track, track_index))
 
     def _cmd_track_stop_all_clips(self, params):
@@ -929,6 +929,7 @@ class AbletonMCP(ControlSurface):
             "chain_path": list(chain_path or []),
             "chain_type_path": list(chain_type_path or []),
             "parameter_index": parameter_index,
+            "is_device_on_parameter": parameter_index == 0,
             "name": getattr(parameter, "name", ""),
             "original_name": getattr(parameter, "original_name", getattr(parameter, "name", "")),
             "value": self._safe_number(getattr(parameter, "value", 0.0)),
@@ -1251,6 +1252,9 @@ class AbletonMCP(ControlSurface):
         return "device"
 
     def _routing_name(self, routing):
+        display_name = getattr(routing, "display_name", None)
+        if display_name is not None:
+            return display_name
         if isinstance(routing, dict):
             return routing.get("display_name")
         if hasattr(routing, "get"):

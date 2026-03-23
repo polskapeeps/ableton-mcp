@@ -20,7 +20,8 @@ logger = logging.getLogger("AbletonMCPServer")
 def invoke_ableton(command_type: str, **params: Any) -> dict[str, Any]:
     try:
         connection = get_ableton_connection()
-        response = connection.send_command(command_type, params)
+        filtered_params = {key: value for key, value in params.items() if value is not None}
+        response = connection.send_command(command_type, filtered_params)
         return normalize_response(response)
     except Exception as exc:
         logger.error("Error running Ableton command %s: %s", command_type, exc)
@@ -78,7 +79,7 @@ def list_devices(ctx: Context, track_index: int) -> dict[str, Any]:
 
 @mcp.tool()
 def list_parameters(ctx: Context, track_index: int, device_index: int) -> dict[str, Any]:
-    """Return all automatable parameters for a track device."""
+    """Return all automatable parameters for a track device. Parameter index 0 is usually the device on/off switch."""
 
     return invoke_ableton(
         "list_parameters",
@@ -112,7 +113,7 @@ def list_nested_device_parameters(
     chain_path: list[int] | None = None,
     chain_type_path: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Return parameters for a nested device path from inspect_device_chain."""
+    """Return parameters for a nested device path from inspect_device_chain. Parameter index 0 is usually the device on/off switch."""
 
     return invoke_ableton(
         "list_nested_device_parameters",
@@ -487,7 +488,7 @@ def device_set_parameter(
     value: float | None = None,
     value_item: str | None = None,
 ) -> dict[str, Any]:
-    """Set a top-level device parameter by numeric value or quantized value label."""
+    """Set a top-level device parameter by numeric value or quantized value label. Parameter index 0 is usually the device on/off switch."""
 
     return invoke_ableton(
         "device_set_parameter",
@@ -510,7 +511,7 @@ def nested_device_set_parameter(
     chain_path: list[int] | None = None,
     chain_type_path: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Set a nested device parameter by numeric value or quantized value label."""
+    """Set a nested device parameter by numeric value or quantized value label. Parameter index 0 is usually the device on/off switch."""
 
     return invoke_ableton(
         "nested_device_set_parameter",
