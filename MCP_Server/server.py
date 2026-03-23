@@ -88,6 +88,42 @@ def list_parameters(ctx: Context, track_index: int, device_index: int) -> dict[s
 
 
 @mcp.tool()
+def inspect_device_chain(
+    ctx: Context,
+    track_index: int,
+    include_parameters: bool = True,
+    max_depth: int = 6,
+) -> dict[str, Any]:
+    """Return the full nested device and chain tree for a track."""
+
+    return invoke_ableton(
+        "inspect_device_chain",
+        track_index=track_index,
+        include_parameters=include_parameters,
+        max_depth=max_depth,
+    )
+
+
+@mcp.tool()
+def list_nested_device_parameters(
+    ctx: Context,
+    track_index: int,
+    device_path: list[int],
+    chain_path: list[int] | None = None,
+    chain_type_path: list[str] | None = None,
+) -> dict[str, Any]:
+    """Return parameters for a nested device path from inspect_device_chain."""
+
+    return invoke_ableton(
+        "list_nested_device_parameters",
+        track_index=track_index,
+        device_path=device_path,
+        chain_path=chain_path or [],
+        chain_type_path=chain_type_path or [],
+    )
+
+
+@mcp.tool()
 def transport_play(ctx: Context) -> dict[str, Any]:
     """Start transport playback from the current start point."""
 

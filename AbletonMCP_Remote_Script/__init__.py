@@ -48,6 +48,8 @@ class AbletonMCP(ControlSurface):
             "list_clip_slots": self._cmd_list_clip_slots,
             "list_devices": self._cmd_list_devices,
             "list_parameters": self._cmd_list_parameters,
+            "inspect_device_chain": self._cmd_inspect_device_chain,
+            "list_nested_device_parameters": self._cmd_list_nested_device_parameters,
             "transport_play": self._cmd_transport_play,
             "transport_continue": self._cmd_transport_continue,
             "transport_stop": self._cmd_transport_stop,
@@ -284,6 +286,80 @@ class AbletonMCP(ControlSurface):
             "parameter_collection",
             {"track_index": track_index, "device_index": device_index},
             {"device": self._device_state(device, track_index, device_index), "parameters": parameters},
+        )
+
+    def _cmd_inspect_device_chain(self, params):
+        track_index = self._require_int(params, "track_index")
+        include_parameters = bool(params.get("include_parameters", True))
+        max_depth = int(params.get("max_depth", 6))
+        track = self._require_track(track_index)
+
+        devices = []
+        for device_index, device in enumerate(track.devices):
+            devices.append(
+                self._device_tree(
+                    track_index,
+                    device,
+                    [device_index],
+                    [],
+                    [],
+                    include_parameters,
+                    max_depth,
+                    0,
+                )
+            )
+
+        state = {
+            "track": self._track_state(track, track_index),
+            "devices": devices,
+            "include_parameters": include_parameters,
+            "max_depth": max_depth,
+        }
+        return self._ok("device_tree", {"track_index": track_index}, state)
+
+    def _cmd_list_nested_device_parameters(self, params):
+        track_index = self._require_int(params, "track_index")
+        device_path = self._normalize_index_list(self._require_value(params, "device_path"), "device_path")
+        chain_path = self._normalize_index_list(params.get("chain_path", []), "chain_path")
+        chain_type_path = self._normalize_chain_types(params.get("chain_type_path", []))
+        track = self._require_track(track_index)
+
+        device = self._resolve_nested_device(track, device_path, chain_path, chain_type_path)
+        parameter_states = []
+        for parameter_index, parameter in enumerate(device.parameters):
+            parameter_states.append(
+                self._parameter_state(
+                    parameter,
+                    track_index,
+                    device_path[-1],
+                    parameter_index,
+                    device_path=device_path,
+                    chain_path=chain_path,
+                    chain_type_path=chain_type_path,
+                )
+            )
+
+        state = {
+            "device": self._device_state(
+                device,
+                track_index,
+                device_path[-1],
+                device_path=device_path,
+                chain_path=chain_path,
+                chain_type_path=chain_type_path,
+                include_parameters=False,
+            ),
+            "parameters": parameter_states,
+        }
+        return self._ok(
+            "parameter_collection",
+            {
+                "track_index": track_index,
+                "device_path": device_path,
+                "chain_path": chain_path,
+                "chain_type_path": chain_type_path,
+            },
+            state,
         )
 
     def _cmd_transport_play(self, params):
@@ -749,31 +825,233 @@ class AbletonMCP(ControlSurface):
             "end_marker": self._safe_number(getattr(clip, "end_marker", 0.0)),
         }
 
-    def _device_state(self, device, track_index, device_index):
-        return {
+    def _device_state(
+        self,
+        device,
+        track_index,
+        device_index,
+        device_path=None,
+        chain_path=None,
+        chain_type_path=None,
+        include_parameters=False,
+    ):
+        state = {
             "track_index": track_index,
             "device_index": device_index,
+            "device_path": list(device_path or [device_index]),
+            "chain_path": list(chain_path or []),
+            "chain_type_path": list(chain_type_path or []),
             "name": getattr(device, "name", ""),
             "class_name": getattr(device, "class_name", ""),
             "class_display_name": getattr(device, "class_display_name", ""),
             "type": self._device_type(device),
+            "is_active": bool(getattr(device, "is_active", True)),
+            "is_enabled": bool(getattr(device, "is_enabled", True)),
             "can_have_chains": bool(getattr(device, "can_have_chains", False)),
             "can_have_drum_pads": bool(getattr(device, "can_have_drum_pads", False)),
+            "chain_count": len(getattr(device, "chains", [])),
+            "return_chain_count": len(getattr(device, "return_chains", [])),
             "parameter_count": len(device.parameters),
         }
 
-    def _parameter_state(self, parameter, track_index, device_index, parameter_index):
+        if include_parameters:
+            parameters = []
+            for parameter_index, parameter in enumerate(device.parameters):
+                parameters.append(
+                    self._parameter_state(
+                        parameter,
+                        track_index,
+                        device_index,
+                        parameter_index,
+                        device_path=device_path,
+                        chain_path=chain_path,
+                        chain_type_path=chain_type_path,
+                    )
+                )
+            state["parameters"] = parameters
+
+        return state
+
+    def _parameter_state(
+        self,
+        parameter,
+        track_index,
+        device_index,
+        parameter_index,
+        device_path=None,
+        chain_path=None,
+        chain_type_path=None,
+    ):
+        value_items = list(getattr(parameter, "value_items", []) or [])
         return {
             "track_index": track_index,
             "device_index": device_index,
+            "device_path": list(device_path or [device_index]),
+            "chain_path": list(chain_path or []),
+            "chain_type_path": list(chain_type_path or []),
             "parameter_index": parameter_index,
             "name": getattr(parameter, "name", ""),
             "original_name": getattr(parameter, "original_name", getattr(parameter, "name", "")),
             "value": self._safe_number(getattr(parameter, "value", 0.0)),
+            "default_value": self._safe_number(getattr(parameter, "default_value", getattr(parameter, "value", 0.0))),
             "min": self._safe_number(getattr(parameter, "min", 0.0)),
             "max": self._safe_number(getattr(parameter, "max", 1.0)),
             "is_enabled": bool(getattr(parameter, "is_enabled", True)),
+            "is_quantized": bool(getattr(parameter, "is_quantized", False)),
+            "value_items": value_items,
         }
+
+    def _device_tree(
+        self,
+        track_index,
+        device,
+        device_path,
+        chain_path,
+        chain_type_path,
+        include_parameters,
+        max_depth,
+        depth,
+    ):
+        state = self._device_state(
+            device,
+            track_index,
+            device_path[-1],
+            device_path=device_path,
+            chain_path=chain_path,
+            chain_type_path=chain_type_path,
+            include_parameters=include_parameters,
+        )
+
+        if depth >= max_depth:
+            state["truncated"] = True
+            state["chains"] = []
+            state["return_chains"] = []
+            return state
+
+        state["chains"] = self._chain_collection_state(
+            getattr(device, "chains", []),
+            "chains",
+            track_index,
+            device_path,
+            chain_path,
+            chain_type_path,
+            include_parameters,
+            max_depth,
+            depth,
+        )
+        state["return_chains"] = self._chain_collection_state(
+            getattr(device, "return_chains", []),
+            "return_chains",
+            track_index,
+            device_path,
+            chain_path,
+            chain_type_path,
+            include_parameters,
+            max_depth,
+            depth,
+        )
+        return state
+
+    def _chain_collection_state(
+        self,
+        chains,
+        chain_type,
+        track_index,
+        parent_device_path,
+        parent_chain_path,
+        parent_chain_type_path,
+        include_parameters,
+        max_depth,
+        depth,
+    ):
+        states = []
+        for chain_index, chain in enumerate(chains):
+            chain_state = {
+                "chain_index": chain_index,
+                "chain_type": chain_type,
+                "name": getattr(chain, "name", ""),
+                "color": getattr(chain, "color", None),
+                "mute": bool(getattr(chain, "mute", False)),
+                "solo": bool(getattr(chain, "solo", False)),
+                "device_count": len(chain.devices),
+                "devices": [],
+            }
+
+            child_chain_path = list(parent_chain_path) + [chain_index]
+            child_chain_type_path = list(parent_chain_type_path) + [chain_type]
+            for child_device_index, child_device in enumerate(chain.devices):
+                child_device_path = list(parent_device_path) + [child_device_index]
+                chain_state["devices"].append(
+                    self._device_tree(
+                        track_index,
+                        child_device,
+                        child_device_path,
+                        child_chain_path,
+                        child_chain_type_path,
+                        include_parameters,
+                        max_depth,
+                        depth + 1,
+                    )
+                )
+
+            states.append(chain_state)
+        return states
+
+    def _resolve_nested_device(self, track, device_path, chain_path, chain_type_path):
+        if not device_path:
+            raise AbletonMCPError("invalid_request", "device_path must contain at least one device index")
+
+        if len(device_path) != len(chain_path) + 1:
+            raise AbletonMCPError(
+                "invalid_request",
+                "device_path length must be exactly one greater than chain_path length",
+            )
+
+        if chain_type_path and len(chain_type_path) != len(chain_path):
+            raise AbletonMCPError(
+                "invalid_request",
+                "chain_type_path length must match chain_path length",
+            )
+
+        if not chain_type_path:
+            chain_type_path = ["chains"] * len(chain_path)
+
+        device = self._require_device(track, None, device_path[0])
+        for level, chain_index in enumerate(chain_path):
+            chain_type = chain_type_path[level]
+            if chain_type not in ("chains", "return_chains"):
+                raise AbletonMCPError("invalid_request", "chain_type_path entries must be 'chains' or 'return_chains'")
+
+            chain_collection = getattr(device, chain_type, None)
+            if chain_collection is None:
+                raise AbletonMCPError("unsupported_operation", "Device does not expose {0}".format(chain_type))
+
+            if chain_index < 0 or chain_index >= len(chain_collection):
+                raise AbletonMCPError("invalid_index", "Chain index out of range")
+
+            chain = chain_collection[chain_index]
+            next_device_index = device_path[level + 1]
+            if next_device_index < 0 or next_device_index >= len(chain.devices):
+                raise AbletonMCPError("invalid_index", "Nested device index out of range")
+
+            device = chain.devices[next_device_index]
+
+        return device
+
+    def _normalize_index_list(self, value, field_name):
+        if not isinstance(value, list):
+            raise AbletonMCPError("invalid_request", "{0} must be a list of integers".format(field_name))
+        try:
+            return [int(item) for item in value]
+        except Exception:
+            raise AbletonMCPError("invalid_request", "{0} must be a list of integers".format(field_name))
+
+    def _normalize_chain_types(self, value):
+        if not value:
+            return []
+        if not isinstance(value, list):
+            raise AbletonMCPError("invalid_request", "chain_type_path must be a list")
+        return [str(item) for item in value]
 
     def _require_track(self, track_index):
         if track_index < 0 or track_index >= len(self._song.tracks):

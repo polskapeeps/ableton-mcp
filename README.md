@@ -10,7 +10,7 @@ Give feedback, get inspired, and build on top of the MCP: [Discord](https://disc
 ## Features
 
 - **Structured MCP tools**: Every tool returns `ok`, `error`, `object_type`, `object_ref`, and `state`
-- **Deeper session control**: Inspect tracks, scenes, clip slots, devices, parameters, and transport state
+- **Deeper session control**: Inspect tracks, scenes, clip slots, devices, nested chains, parameters, and transport state
 - **Production editing workflows**: Create, rename, duplicate, delete, launch, and stop tracks, scenes, and clips
 - **Mixer and device control**: Adjust arm, mute, solo, volume, pan, sends, tempo, metronome, and device parameters
 - **Safer destructive changes**: Track, scene, clip, and device removals require `confirm_destructive=true`
@@ -123,7 +123,7 @@ Once the config file has been set on Claude, and the remote script is running in
 
 ## Capabilities
 
-- Inspect transport, selections, tracks, scenes, clip slots, devices, and parameters
+- Inspect transport, selections, tracks, scenes, clip slots, devices, nested chains, and parameters
 - Create MIDI and audio tracks plus session clips
 - Rename and recolor tracks, scenes, and clips
 - Launch and stop scenes and clips
@@ -137,13 +137,14 @@ Here are some examples of what you can ask Claude to do:
 
 - "Create an 80s synthwave track" [Demo](https://youtu.be/VH9g66e42XA)
 - "Create a Metro Boomin style hip-hop beat"
-- "Show me all tracks, devices on track 2, and the parameters on device 0"
+- "Show me all tracks, inspect the full device chain on track 2, and list the parameters on the synth inside Rack chain 1"
 - "Create a new MIDI track named Bassline, arm it, and set its volume to -6 dB"
 - "Create a 4-bar MIDI clip on track 1 slot 0 and add a simple melody"
 - "Duplicate scene 3 with confirmation and launch the new scene"
 - "Rename clip slot 1 on track 2 to Intro Hook and set its loop from 0 to 8 bars"
 - "Turn the metronome on and set the tempo to 120 BPM"
 - "Set device parameter 5 on track 0 device 1 to 0.65"
+- "Inspect the nested device chain on track 3 so you can suggest mastering moves based on the current stock Ableton chain"
 - "Delete track 4 with confirmation"
 
 
