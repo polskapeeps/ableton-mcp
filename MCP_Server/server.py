@@ -135,6 +135,39 @@ def list_nested_device_parameters(
 
 
 @mcp.tool()
+def browser_list_roots(ctx: Context) -> dict[str, Any]:
+    """Return the top-level Ableton browser categories that are currently available."""
+
+    return invoke_ableton("browser_list_roots")
+
+
+@mcp.tool()
+def browser_list_path(ctx: Context, path: str) -> dict[str, Any]:
+    """Return the browser items at a path like instruments/Analog or audio_effects/EQ & Filters."""
+
+    return invoke_ableton("browser_list_path", path=path)
+
+
+@mcp.tool()
+def device_load_browser_item(
+    ctx: Context,
+    track_index: int | None = None,
+    track_type: str = "tracks",
+    item_uri: str | None = None,
+    path: str | None = None,
+) -> dict[str, Any]:
+    """Load a stock Ableton browser item onto a session, return, or master track by URI or browser path."""
+
+    return invoke_ableton(
+        "device_load_browser_item",
+        track_index=track_index,
+        track_type=track_type,
+        item_uri=item_uri,
+        path=path,
+    )
+
+
+@mcp.tool()
 def transport_play(ctx: Context) -> dict[str, Any]:
     """Start transport playback from the current start point."""
 

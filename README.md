@@ -13,6 +13,7 @@ Give feedback, get inspired, and build on top of the MCP: [Discord](https://disc
 - **Deeper session control**: Inspect session tracks, return tracks, the master track, devices, nested chains, parameters, and transport state
 - **Production editing workflows**: Create, rename, duplicate, delete, launch, and stop tracks, scenes, and clips
 - **Mixer and device control**: Adjust arm, mute, solo, volume, pan, sends, tempo, metronome, and device parameters
+- **Stock browser loading**: Browse Ableton's device browser and load stock instruments or effects onto session, return, or master tracks
 - **Safer destructive changes**: Track, scene, clip, and device removals require `confirm_destructive=true`
 
 ## Components
@@ -125,6 +126,7 @@ Once the config file has been set on Claude, and the remote script is running in
 
 - Inspect transport, selections, session tracks, return tracks, the master track, devices, nested chains, and parameters
 - Create MIDI and audio tracks plus session clips
+- Browse stock Ableton browser roots and paths, then load instruments/effects by URI or browser path
 - Rename and recolor tracks, scenes, and clips
 - Launch and stop scenes and clips
 - Duplicate and delete tracks, scenes, clips, and devices with explicit confirmation
@@ -149,6 +151,8 @@ Here are some examples of what you can ask Claude to do:
 - "Inspect the nested device chain on track 3 so you can suggest mastering moves based on the current stock Ableton chain"
 - "Inspect the master track device chain and suggest mastering adjustments based on the current stock Ableton chain"
 - "List devices on return track 0 and adjust a send effect parameter there"
+- "Browse instruments, load Analog onto a new MIDI track, then inspect its parameters"
+- "Browse audio_effects and load EQ Eight onto the master track"
 - "Delete track 4 with confirmation"
 
 
@@ -170,9 +174,10 @@ The system uses a simple JSON-based protocol over TCP sockets:
 ### Limitations & Security Considerations
 
 - This version is optimized for one local Ableton install rather than broad Live-version compatibility
-- The tool focuses on session view, mixer, and device workflows; arrangement editing and browser/device loading are not part of this pass
+- The tool focuses on session view, mixer, device workflows, and stock browser loading; arrangement editing is not part of this pass
 - Ableton's API does not expose every UI concept. Modulation matrix routing and some stock-device type selectors are not available as normal parameters, so those may still require manual intervention in Live
 - Third-party VSTs may expose cryptic or incomplete parameter metadata compared with stock Ableton devices
+- Browser loading is aimed at stock Ableton devices first. Third-party plugin insertion may require different browser paths and may be less reliable
 - Always save your Live Set before extensive experimentation
 
 ## Contributing

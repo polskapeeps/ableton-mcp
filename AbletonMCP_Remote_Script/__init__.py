@@ -50,6 +50,9 @@ class AbletonMCP(ControlSurface):
             "list_parameters": self._cmd_list_parameters,
             "inspect_device_chain": self._cmd_inspect_device_chain,
             "list_nested_device_parameters": self._cmd_list_nested_device_parameters,
+            "browser_list_roots": self._cmd_browser_list_roots,
+            "browser_list_path": self._cmd_browser_list_path,
+            "device_load_browser_item": self._cmd_device_load_browser_item,
             "transport_play": self._cmd_transport_play,
             "transport_continue": self._cmd_transport_continue,
             "transport_stop": self._cmd_transport_stop,
@@ -392,6 +395,67 @@ class AbletonMCP(ControlSurface):
             },
             state,
         )
+
+    def _cmd_browser_list_roots(self, params):
+        browser = self._get_browser()
+        items = []
+        for attr_name in self._browser_root_names(browser):
+            try:
+                item = getattr(browser, attr_name)
+            except Exception:
+                continue
+            items.append(self._browser_item_state(item, attr_name))
+        return self._ok("browser_root_collection", {}, {"items": items})
+
+    def _cmd_browser_list_path(self, params):
+        browser = self._get_browser()
+        path = self._require_text(params, "path")
+        item, resolved_path = self._resolve_browser_path(browser, path)
+        children = []
+        for child in self._safe_attr(item, "children", []) or []:
+            children.append(self._browser_item_state(child, self._join_browser_path(resolved_path, self._safe_attr(child, "name", ""))))
+        return self._ok(
+            "browser_path_listing",
+            {"path": resolved_path},
+            {"item": self._browser_item_state(item, resolved_path), "items": children},
+        )
+
+    def _cmd_device_load_browser_item(self, params):
+        track_type = self._normalize_track_type(params.get("track_type", "tracks"))
+        track_index = self._get_optional_track_index(params, track_type)
+        track = self._require_track(track_index, track_type)
+        browser = self._get_browser()
+
+        item_uri = params.get("item_uri")
+        path = params.get("path")
+        if item_uri is None and path is None:
+            raise AbletonMCPError("invalid_request", "Provide either item_uri or path")
+        if item_uri is not None and path is not None:
+            raise AbletonMCPError("invalid_request", "Provide only one of item_uri or path")
+
+        if item_uri is not None:
+            item = self._find_browser_item_by_uri(browser, item_uri)
+            if item is None:
+                raise AbletonMCPError("object_missing", "Browser item with the given URI was not found")
+            resolved_path = self._safe_attr(item, "name", item_uri)
+        else:
+            item, resolved_path = self._resolve_browser_path(browser, path)
+
+        if not bool(self._safe_attr(item, "is_loadable", False)):
+            raise AbletonMCPError("unsupported_operation", "Selected browser item is not loadable")
+
+        devices_before = [self._safe_attr(device, "name", "") for device in track.devices]
+        self._song.view.selected_track = track
+        browser.load_item(item)
+        devices_after = [self._safe_attr(device, "name", "") for device in track.devices]
+
+        state = {
+            "track": self._track_state(track, track_index, track_type),
+            "loaded_item": self._browser_item_state(item, resolved_path),
+            "devices_before": devices_before,
+            "devices_after": devices_after,
+        }
+        return self._ok("device_load", self._track_ref(track_type, track_index), state)
 
     def _cmd_transport_play(self, params):
         self._song.start_playing()
@@ -1136,6 +1200,125 @@ class AbletonMCP(ControlSurface):
             device = chain.devices[next_device_index]
 
         return device
+
+    def _get_browser(self):
+        app = self.application()
+        if not app:
+            raise AbletonMCPError("remote_error", "Could not access the Ableton application")
+        browser = self._safe_attr(app, "browser", None)
+        if browser is None:
+            raise AbletonMCPError("unsupported_operation", "Ableton browser is not available")
+        return browser
+
+    def _browser_root_names(self, browser):
+        preferred_names = [
+            "instruments",
+            "audio_effects",
+            "midi_effects",
+            "drums",
+            "sounds",
+            "plugins",
+            "max_for_live",
+            "samples",
+            "clips",
+        ]
+        names = []
+        for attr_name in preferred_names:
+            try:
+                item = getattr(browser, attr_name)
+            except Exception:
+                item = None
+            if item is not None:
+                names.append(attr_name)
+        if names:
+            return names
+
+        discovered = []
+        for attr_name in dir(browser):
+            if attr_name.startswith("_"):
+                continue
+            try:
+                item = getattr(browser, attr_name)
+            except Exception:
+                continue
+            if hasattr(item, "children") or hasattr(item, "name"):
+                discovered.append(attr_name)
+        return discovered
+
+    def _resolve_browser_path(self, browser, path):
+        path_parts = [part for part in path.split("/") if part]
+        if not path_parts:
+            raise AbletonMCPError("invalid_request", "Browser path must not be empty")
+
+        root_name = path_parts[0]
+        try:
+            current_item = getattr(browser, root_name)
+        except Exception:
+            raise AbletonMCPError("invalid_request", "Unknown browser root: {0}".format(root_name))
+
+        resolved_path = root_name
+        for part in path_parts[1:]:
+            children = self._safe_attr(current_item, "children", []) or []
+            matched_child = None
+            for child in children:
+                child_name = self._safe_attr(child, "name", "")
+                if child_name.lower() == part.lower():
+                    matched_child = child
+                    break
+            if matched_child is None:
+                raise AbletonMCPError("object_missing", "Browser path part not found: {0}".format(part))
+            current_item = matched_child
+            resolved_path = self._join_browser_path(resolved_path, self._safe_attr(current_item, "name", part))
+
+        return current_item, resolved_path
+
+    def _join_browser_path(self, base_path, child_name):
+        if not base_path:
+            return child_name
+        if not child_name:
+            return base_path
+        return base_path + "/" + child_name
+
+    def _browser_item_state(self, item, path):
+        children = self._safe_attr(item, "children", None)
+        return {
+            "path": path,
+            "name": self._safe_attr(item, "name", ""),
+            "is_folder": bool(children),
+            "is_device": bool(self._safe_attr(item, "is_device", False)),
+            "is_loadable": bool(self._safe_attr(item, "is_loadable", False)),
+            "uri": self._safe_attr(item, "uri", None),
+            "child_count": len(children or []),
+        }
+
+    def _find_browser_item_by_uri(self, browser_or_item, uri, max_depth=10, current_depth=0):
+        try:
+            current_uri = self._safe_attr(browser_or_item, "uri", None)
+            if current_uri == uri:
+                return browser_or_item
+
+            if current_depth >= max_depth:
+                return None
+
+            if hasattr(browser_or_item, "instruments"):
+                for attr_name in self._browser_root_names(browser_or_item):
+                    try:
+                        root_item = getattr(browser_or_item, attr_name)
+                    except Exception:
+                        continue
+                    found = self._find_browser_item_by_uri(root_item, uri, max_depth, current_depth + 1)
+                    if found is not None:
+                        return found
+                return None
+
+            children = self._safe_attr(browser_or_item, "children", []) or []
+            for child in children:
+                found = self._find_browser_item_by_uri(child, uri, max_depth, current_depth + 1)
+                if found is not None:
+                    return found
+            return None
+        except Exception:
+            return None
 
     def _normalize_index_list(self, value, field_name):
         if not isinstance(value, list):
