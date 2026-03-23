@@ -241,9 +241,23 @@ class AbletonMCP(ControlSurface):
 
     def _cmd_list_tracks(self, params):
         tracks = []
+        return_tracks = []
         for index, track in enumerate(self._song.tracks):
-            tracks.append(self._track_state(track, index))
-        return self._ok("track_collection", {}, {"tracks": tracks, "count": len(tracks)})
+            tracks.append(self._track_state(track, index, "tracks"))
+        for index, track in enumerate(self._song.return_tracks):
+            return_tracks.append(self._track_state(track, index, "return_tracks"))
+        master_track = self._track_state(self._song.master_track, None, "master_track")
+        return self._ok(
+            "track_collection",
+            {},
+            {
+                "tracks": tracks,
+                "return_tracks": return_tracks,
+                "master_track": master_track,
+                "count": len(tracks),
+                "return_track_count": len(return_tracks),
+            },
+        )
 
     def _cmd_list_scenes(self, params):
         scenes = []
@@ -264,36 +278,47 @@ class AbletonMCP(ControlSurface):
         )
 
     def _cmd_list_devices(self, params):
-        track_index = self._require_int(params, "track_index")
-        track = self._require_track(track_index)
+        track_type = self._normalize_track_type(params.get("track_type", "tracks"))
+        track_index = self._get_optional_track_index(params, track_type)
+        track = self._require_track(track_index, track_type)
         devices = []
         for device_index, device in enumerate(track.devices):
-            devices.append(self._device_state(device, track_index, device_index))
+            devices.append(self._device_state(device, track_index, device_index, track_type=track_type))
         return self._ok(
             "device_collection",
-            {"track_index": track_index},
-            {"track": self._track_state(track, track_index), "devices": devices},
+            self._track_ref(track_type, track_index),
+            {"track": self._track_state(track, track_index, track_type), "devices": devices},
         )
 
     def _cmd_list_parameters(self, params):
-        track_index = self._require_int(params, "track_index")
+        track_type = self._normalize_track_type(params.get("track_type", "tracks"))
+        track_index = self._get_optional_track_index(params, track_type)
         device_index = self._require_int(params, "device_index")
-        track = self._require_track(track_index)
-        device = self._require_device(track, track_index, device_index)
+        track = self._require_track(track_index, track_type)
+        device = self._require_device(track, track_index, device_index, track_type=track_type)
         parameters = []
         for parameter_index, parameter in enumerate(device.parameters):
-            parameters.append(self._parameter_state(parameter, track_index, device_index, parameter_index))
+            parameters.append(
+                self._parameter_state(
+                    parameter,
+                    track_index,
+                    device_index,
+                    parameter_index,
+                    track_type=track_type,
+                )
+            )
         return self._ok(
             "parameter_collection",
-            {"track_index": track_index, "device_index": device_index},
-            {"device": self._device_state(device, track_index, device_index), "parameters": parameters},
+            self._track_ref(track_type, track_index, device_index=device_index),
+            {"device": self._device_state(device, track_index, device_index, track_type=track_type), "parameters": parameters},
         )
 
     def _cmd_inspect_device_chain(self, params):
-        track_index = self._require_int(params, "track_index")
+        track_type = self._normalize_track_type(params.get("track_type", "tracks"))
+        track_index = self._get_optional_track_index(params, track_type)
         include_parameters = bool(params.get("include_parameters", True))
         max_depth = int(params.get("max_depth", 6))
-        track = self._require_track(track_index)
+        track = self._require_track(track_index, track_type)
 
         devices = []
         for device_index, device in enumerate(track.devices):
@@ -307,23 +332,25 @@ class AbletonMCP(ControlSurface):
                     include_parameters,
                     max_depth,
                     0,
+                    track_type=track_type,
                 )
             )
 
         state = {
-            "track": self._track_state(track, track_index),
+            "track": self._track_state(track, track_index, track_type),
             "devices": devices,
             "include_parameters": include_parameters,
             "max_depth": max_depth,
         }
-        return self._ok("device_tree", {"track_index": track_index}, state)
+        return self._ok("device_tree", self._track_ref(track_type, track_index), state)
 
     def _cmd_list_nested_device_parameters(self, params):
-        track_index = self._require_int(params, "track_index")
+        track_type = self._normalize_track_type(params.get("track_type", "tracks"))
+        track_index = self._get_optional_track_index(params, track_type)
         device_path = self._normalize_index_list(self._require_value(params, "device_path"), "device_path")
         chain_path = self._normalize_index_list(params.get("chain_path", []), "chain_path")
         chain_type_path = self._normalize_chain_types(params.get("chain_type_path", []))
-        track = self._require_track(track_index)
+        track = self._require_track(track_index, track_type)
 
         device = self._resolve_nested_device(track, device_path, chain_path, chain_type_path)
         parameter_states = []
@@ -337,6 +364,7 @@ class AbletonMCP(ControlSurface):
                     device_path=device_path,
                     chain_path=chain_path,
                     chain_type_path=chain_type_path,
+                    track_type=track_type,
                 )
             )
 
@@ -349,12 +377,14 @@ class AbletonMCP(ControlSurface):
                 chain_path=chain_path,
                 chain_type_path=chain_type_path,
                 include_parameters=False,
+                track_type=track_type,
             ),
             "parameters": parameter_states,
         }
         return self._ok(
             "parameter_collection",
             {
+                "track_type": track_type,
                 "track_index": track_index,
                 "device_path": device_path,
                 "chain_path": chain_path,
@@ -689,13 +719,14 @@ class AbletonMCP(ControlSurface):
         )
 
     def _cmd_device_set_parameter(self, params):
-        track_index = self._require_int(params, "track_index")
+        track_type = self._normalize_track_type(params.get("track_type", "tracks"))
+        track_index = self._get_optional_track_index(params, track_type)
         device_index = self._require_int(params, "device_index")
         parameter_index = self._require_int(params, "parameter_index")
 
-        track = self._require_track(track_index)
-        device = self._require_device(track, track_index, device_index)
-        parameter = self._require_parameter(device, track_index, device_index, parameter_index)
+        track = self._require_track(track_index, track_type)
+        device = self._require_device(track, track_index, device_index, track_type=track_type)
+        parameter = self._require_parameter(device, track_index, device_index, parameter_index, track_type=track_type)
         self._set_parameter(
             parameter,
             value=params.get("value"),
@@ -704,23 +735,25 @@ class AbletonMCP(ControlSurface):
         return self._ok(
             "parameter",
             {
+                "track_type": track_type,
                 "track_index": track_index,
                 "device_index": device_index,
                 "parameter_index": parameter_index,
             },
-            self._parameter_state(parameter, track_index, device_index, parameter_index),
+            self._parameter_state(parameter, track_index, device_index, parameter_index, track_type=track_type),
         )
 
     def _cmd_nested_device_set_parameter(self, params):
-        track_index = self._require_int(params, "track_index")
+        track_type = self._normalize_track_type(params.get("track_type", "tracks"))
+        track_index = self._get_optional_track_index(params, track_type)
         parameter_index = self._require_int(params, "parameter_index")
         device_path = self._normalize_index_list(self._require_value(params, "device_path"), "device_path")
         chain_path = self._normalize_index_list(params.get("chain_path", []), "chain_path")
         chain_type_path = self._normalize_chain_types(params.get("chain_type_path", []))
 
-        track = self._require_track(track_index)
+        track = self._require_track(track_index, track_type)
         device = self._resolve_nested_device(track, device_path, chain_path, chain_type_path)
-        parameter = self._require_parameter(device, track_index, device_path[-1], parameter_index)
+        parameter = self._require_parameter(device, track_index, device_path[-1], parameter_index, track_type=track_type)
         self._set_parameter(
             parameter,
             value=params.get("value"),
@@ -729,6 +762,7 @@ class AbletonMCP(ControlSurface):
         return self._ok(
             "parameter",
             {
+                "track_type": track_type,
                 "track_index": track_index,
                 "device_path": device_path,
                 "chain_path": chain_path,
@@ -743,20 +777,22 @@ class AbletonMCP(ControlSurface):
                 device_path=device_path,
                 chain_path=chain_path,
                 chain_type_path=chain_type_path,
+                track_type=track_type,
             ),
         )
 
     def _cmd_device_delete(self, params):
         self._require_confirmed(params)
-        track_index = self._require_int(params, "track_index")
+        track_type = self._normalize_track_type(params.get("track_type", "tracks"))
+        track_index = self._get_optional_track_index(params, track_type)
         device_index = self._require_int(params, "device_index")
-        track = self._require_track(track_index)
-        self._require_device(track, track_index, device_index)
+        track = self._require_track(track_index, track_type)
+        self._require_device(track, track_index, device_index, track_type=track_type)
         track.delete_device(device_index)
-        return self._ok("track", {"track_index": track_index}, self._track_state(track, track_index))
+        return self._ok("track", self._track_ref(track_type, track_index), self._track_state(track, track_index, track_type))
 
     def _song_state(self):
-        selected_track_index = self._find_track_index(getattr(self._song.view, "selected_track", None))
+        selected_track_ref = self._find_track_ref(getattr(self._song.view, "selected_track", None))
         selected_scene_index = self._find_scene_index(getattr(self._song.view, "selected_scene", None))
         highlighted = self._find_highlighted_clip_slot()
 
@@ -769,13 +805,15 @@ class AbletonMCP(ControlSurface):
             "signature_numerator": int(getattr(self._song, "signature_numerator", 4)),
             "signature_denominator": int(getattr(self._song, "signature_denominator", 4)),
             "track_count": len(self._song.tracks),
+            "return_track_count": len(self._song.return_tracks),
             "scene_count": len(self._song.scenes),
-            "selected_track_index": selected_track_index,
+            "selected_track_index": selected_track_ref.get("track_index") if selected_track_ref else None,
+            "selected_track": selected_track_ref,
             "selected_scene_index": selected_scene_index,
             "highlighted_clip_slot": highlighted,
         }
 
-    def _track_state(self, track, track_index):
+    def _track_state(self, track, track_index, track_type="tracks"):
         sends = []
         for send_index, send in enumerate(track.mixer_device.sends):
             sends.append(
@@ -789,7 +827,9 @@ class AbletonMCP(ControlSurface):
             )
 
         return {
+            "track_type": track_type,
             "track_index": track_index,
+            "track_ref": self._track_ref(track_type, track_index),
             "name": getattr(track, "name", ""),
             "color": getattr(track, "color", None),
             "is_midi_track": bool(getattr(track, "has_midi_input", False)),
@@ -873,8 +913,10 @@ class AbletonMCP(ControlSurface):
         chain_path=None,
         chain_type_path=None,
         include_parameters=False,
+        track_type="tracks",
     ):
         state = {
+            "track_type": track_type,
             "track_index": track_index,
             "device_index": device_index,
             "device_path": list(device_path or [device_index]),
@@ -905,6 +947,7 @@ class AbletonMCP(ControlSurface):
                         device_path=device_path,
                         chain_path=chain_path,
                         chain_type_path=chain_type_path,
+                        track_type=track_type,
                     )
                 )
             state["parameters"] = parameters
@@ -920,6 +963,7 @@ class AbletonMCP(ControlSurface):
         device_path=None,
         chain_path=None,
         chain_type_path=None,
+        track_type="tracks",
     ):
         default_value_missing = object()
         name = self._safe_attr(parameter, "name", "")
@@ -929,6 +973,7 @@ class AbletonMCP(ControlSurface):
         default_value = self._safe_number(default_value_raw if has_default_value else current_value)
         value_items = self._safe_value_items(parameter)
         return {
+            "track_type": track_type,
             "track_index": track_index,
             "device_index": device_index,
             "device_path": list(device_path or [device_index]),
@@ -959,6 +1004,7 @@ class AbletonMCP(ControlSurface):
         include_parameters,
         max_depth,
         depth,
+        track_type="tracks",
     ):
         state = self._device_state(
             device,
@@ -968,6 +1014,7 @@ class AbletonMCP(ControlSurface):
             chain_path=chain_path,
             chain_type_path=chain_type_path,
             include_parameters=include_parameters,
+            track_type=track_type,
         )
 
         if depth >= max_depth:
@@ -986,6 +1033,7 @@ class AbletonMCP(ControlSurface):
             include_parameters,
             max_depth,
             depth,
+            track_type,
         )
         state["return_chains"] = self._chain_collection_state(
             getattr(device, "return_chains", []),
@@ -997,6 +1045,7 @@ class AbletonMCP(ControlSurface):
             include_parameters,
             max_depth,
             depth,
+            track_type,
         )
         return state
 
@@ -1011,6 +1060,7 @@ class AbletonMCP(ControlSurface):
         include_parameters,
         max_depth,
         depth,
+        track_type,
     ):
         states = []
         for chain_index, chain in enumerate(chains):
@@ -1039,6 +1089,7 @@ class AbletonMCP(ControlSurface):
                         include_parameters,
                         max_depth,
                         depth + 1,
+                        track_type=track_type,
                     )
                 )
 
@@ -1101,10 +1152,33 @@ class AbletonMCP(ControlSurface):
             raise AbletonMCPError("invalid_request", "chain_type_path must be a list")
         return [str(item) for item in value]
 
-    def _require_track(self, track_index):
-        if track_index < 0 or track_index >= len(self._song.tracks):
+    def _normalize_track_type(self, track_type):
+        normalized = str(track_type or "tracks")
+        if normalized not in ("tracks", "return_tracks", "master_track"):
+            raise AbletonMCPError("invalid_request", "track_type must be one of tracks, return_tracks, or master_track")
+        return normalized
+
+    def _get_optional_track_index(self, params, track_type):
+        if track_type == "master_track":
+            return None
+        return self._require_int(params, "track_index")
+
+    def _track_ref(self, track_type, track_index, device_index=None):
+        ref = {"track_type": track_type}
+        if track_type != "master_track":
+            ref["track_index"] = track_index
+        if device_index is not None:
+            ref["device_index"] = device_index
+        return ref
+
+    def _require_track(self, track_index, track_type="tracks"):
+        normalized_type = self._normalize_track_type(track_type)
+        if normalized_type == "master_track":
+            return self._song.master_track
+        track_collection = self._song.tracks if normalized_type == "tracks" else self._song.return_tracks
+        if track_index is None or track_index < 0 or track_index >= len(track_collection):
             raise AbletonMCPError("invalid_index", "Track index out of range")
-        return self._song.tracks[track_index]
+        return track_collection[track_index]
 
     def _require_scene(self, scene_index):
         if scene_index < 0 or scene_index >= len(self._song.scenes):
@@ -1122,12 +1196,12 @@ class AbletonMCP(ControlSurface):
             raise AbletonMCPError("object_missing", "Clip slot does not contain a clip")
         return clip_slot.clip
 
-    def _require_device(self, track, track_index, device_index):
+    def _require_device(self, track, track_index, device_index, track_type="tracks"):
         if device_index < 0 or device_index >= len(track.devices):
             raise AbletonMCPError("invalid_index", "Device index out of range")
         return track.devices[device_index]
 
-    def _require_parameter(self, device, track_index, device_index, parameter_index):
+    def _require_parameter(self, device, track_index, device_index, parameter_index, track_type="tracks"):
         if parameter_index < 0 or parameter_index >= len(device.parameters):
             raise AbletonMCPError("invalid_index", "Parameter index out of range")
         return device.parameters[parameter_index]
@@ -1211,12 +1285,17 @@ class AbletonMCP(ControlSurface):
             return minimum + matched_index
         return minimum + (span * (float(matched_index) / step_count))
 
-    def _find_track_index(self, track):
+    def _find_track_ref(self, track):
         if track is None:
             return None
         for index, candidate in enumerate(self._song.tracks):
             if candidate == track:
-                return index
+                return self._track_ref("tracks", index)
+        for index, candidate in enumerate(self._song.return_tracks):
+            if candidate == track:
+                return self._track_ref("return_tracks", index)
+        if self._song.master_track == track:
+            return self._track_ref("master_track", None)
         return None
 
     def _find_scene_index(self, scene):

@@ -10,7 +10,7 @@ Give feedback, get inspired, and build on top of the MCP: [Discord](https://disc
 ## Features
 
 - **Structured MCP tools**: Every tool returns `ok`, `error`, `object_type`, `object_ref`, and `state`
-- **Deeper session control**: Inspect tracks, scenes, clip slots, devices, nested chains, parameters, and transport state
+- **Deeper session control**: Inspect session tracks, return tracks, the master track, devices, nested chains, parameters, and transport state
 - **Production editing workflows**: Create, rename, duplicate, delete, launch, and stop tracks, scenes, and clips
 - **Mixer and device control**: Adjust arm, mute, solo, volume, pan, sends, tempo, metronome, and device parameters
 - **Safer destructive changes**: Track, scene, clip, and device removals require `confirm_destructive=true`
@@ -123,7 +123,7 @@ Once the config file has been set on Claude, and the remote script is running in
 
 ## Capabilities
 
-- Inspect transport, selections, tracks, scenes, clip slots, devices, nested chains, and parameters
+- Inspect transport, selections, session tracks, return tracks, the master track, devices, nested chains, and parameters
 - Create MIDI and audio tracks plus session clips
 - Rename and recolor tracks, scenes, and clips
 - Launch and stop scenes and clips
@@ -147,6 +147,8 @@ Here are some examples of what you can ask Claude to do:
 - "Inspect the rack on track 2, then set the nested synth filter cutoff by parameter index using its device_path and chain_path"
 - "Set a quantized stock Ableton parameter by label, like choosing an oscillator mode via value_item"
 - "Inspect the nested device chain on track 3 so you can suggest mastering moves based on the current stock Ableton chain"
+- "Inspect the master track device chain and suggest mastering adjustments based on the current stock Ableton chain"
+- "List devices on return track 0 and adjust a send effect parameter there"
 - "Delete track 4 with confirmation"
 
 
@@ -168,7 +170,9 @@ The system uses a simple JSON-based protocol over TCP sockets:
 ### Limitations & Security Considerations
 
 - This version is optimized for one local Ableton install rather than broad Live-version compatibility
-- The tool focuses on session view, mixer, and device workflows; arrangement editing and browser import are not part of this pass
+- The tool focuses on session view, mixer, and device workflows; arrangement editing and browser/device loading are not part of this pass
+- Ableton's API does not expose every UI concept. Modulation matrix routing and some stock-device type selectors are not available as normal parameters, so those may still require manual intervention in Live
+- Third-party VSTs may expose cryptic or incomplete parameter metadata compared with stock Ableton devices
 - Always save your Live Set before extensive experimentation
 
 ## Contributing

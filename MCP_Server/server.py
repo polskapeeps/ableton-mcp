@@ -51,7 +51,7 @@ def live_status(ctx: Context) -> dict[str, Any]:
 
 @mcp.tool()
 def list_tracks(ctx: Context) -> dict[str, Any]:
-    """Return all session tracks with mixer and playback summary fields."""
+    """Return session tracks plus return and master track summaries."""
 
     return invoke_ableton("list_tracks")
 
@@ -71,19 +71,25 @@ def list_clip_slots(ctx: Context, track_index: int) -> dict[str, Any]:
 
 
 @mcp.tool()
-def list_devices(ctx: Context, track_index: int) -> dict[str, Any]:
-    """Return the devices for a track."""
+def list_devices(ctx: Context, track_index: int | None = None, track_type: str = "tracks") -> dict[str, Any]:
+    """Return the devices for a session, return, or master track."""
 
-    return invoke_ableton("list_devices", track_index=track_index)
+    return invoke_ableton("list_devices", track_index=track_index, track_type=track_type)
 
 
 @mcp.tool()
-def list_parameters(ctx: Context, track_index: int, device_index: int) -> dict[str, Any]:
-    """Return all automatable parameters for a track device. Parameter index 0 is usually the device on/off switch."""
+def list_parameters(
+    ctx: Context,
+    device_index: int,
+    track_index: int | None = None,
+    track_type: str = "tracks",
+) -> dict[str, Any]:
+    """Return all automatable parameters for a session, return, or master track device. Parameter index 0 is usually the device on/off switch."""
 
     return invoke_ableton(
         "list_parameters",
         track_index=track_index,
+        track_type=track_type,
         device_index=device_index,
     )
 
@@ -91,15 +97,17 @@ def list_parameters(ctx: Context, track_index: int, device_index: int) -> dict[s
 @mcp.tool()
 def inspect_device_chain(
     ctx: Context,
-    track_index: int,
+    track_index: int | None = None,
+    track_type: str = "tracks",
     include_parameters: bool = True,
     max_depth: int = 6,
 ) -> dict[str, Any]:
-    """Return the full nested device and chain tree for a track."""
+    """Return the full nested device and chain tree for a session, return, or master track."""
 
     return invoke_ableton(
         "inspect_device_chain",
         track_index=track_index,
+        track_type=track_type,
         include_parameters=include_parameters,
         max_depth=max_depth,
     )
@@ -108,16 +116,18 @@ def inspect_device_chain(
 @mcp.tool()
 def list_nested_device_parameters(
     ctx: Context,
-    track_index: int,
     device_path: list[int],
+    track_index: int | None = None,
+    track_type: str = "tracks",
     chain_path: list[int] | None = None,
     chain_type_path: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Return parameters for a nested device path from inspect_device_chain. Parameter index 0 is usually the device on/off switch."""
+    """Return parameters for a nested device path from inspect_device_chain on a session, return, or master track. Parameter index 0 is usually the device on/off switch."""
 
     return invoke_ableton(
         "list_nested_device_parameters",
         track_index=track_index,
+        track_type=track_type,
         device_path=device_path,
         chain_path=chain_path or [],
         chain_type_path=chain_type_path or [],
@@ -482,17 +492,19 @@ def clip_delete(
 @mcp.tool()
 def device_set_parameter(
     ctx: Context,
-    track_index: int,
     device_index: int,
     parameter_index: int,
+    track_index: int | None = None,
+    track_type: str = "tracks",
     value: float | None = None,
     value_item: str | None = None,
 ) -> dict[str, Any]:
-    """Set a top-level device parameter by numeric value or quantized value label. Parameter index 0 is usually the device on/off switch."""
+    """Set a top-level device parameter on a session, return, or master track by numeric value or quantized value label. Parameter index 0 is usually the device on/off switch."""
 
     return invoke_ableton(
         "device_set_parameter",
         track_index=track_index,
+        track_type=track_type,
         device_index=device_index,
         parameter_index=parameter_index,
         value=value,
@@ -503,19 +515,21 @@ def device_set_parameter(
 @mcp.tool()
 def nested_device_set_parameter(
     ctx: Context,
-    track_index: int,
     device_path: list[int],
     parameter_index: int,
+    track_index: int | None = None,
+    track_type: str = "tracks",
     value: float | None = None,
     value_item: str | None = None,
     chain_path: list[int] | None = None,
     chain_type_path: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Set a nested device parameter by numeric value or quantized value label. Parameter index 0 is usually the device on/off switch."""
+    """Set a nested device parameter on a session, return, or master track by numeric value or quantized value label. Parameter index 0 is usually the device on/off switch."""
 
     return invoke_ableton(
         "nested_device_set_parameter",
         track_index=track_index,
+        track_type=track_type,
         device_path=device_path,
         parameter_index=parameter_index,
         value=value,
@@ -528,15 +542,17 @@ def nested_device_set_parameter(
 @mcp.tool()
 def device_delete(
     ctx: Context,
-    track_index: int,
     device_index: int,
     confirm_destructive: bool,
+    track_index: int | None = None,
+    track_type: str = "tracks",
 ) -> dict[str, Any]:
-    """Delete a device from a track. Explicit confirmation is required."""
+    """Delete a device from a session, return, or master track. Explicit confirmation is required."""
 
     return invoke_ableton(
         "device_delete",
         track_index=track_index,
+        track_type=track_type,
         device_index=device_index,
         confirm_destructive=confirm_destructive,
     )
