@@ -921,7 +921,13 @@ class AbletonMCP(ControlSurface):
         chain_path=None,
         chain_type_path=None,
     ):
-        value_items = list(getattr(parameter, "value_items", []) or [])
+        default_value_missing = object()
+        name = self._safe_attr(parameter, "name", "")
+        current_value = self._safe_number(self._safe_attr(parameter, "value", 0.0))
+        default_value_raw = self._safe_attr(parameter, "default_value", default_value_missing)
+        has_default_value = default_value_raw is not default_value_missing
+        default_value = self._safe_number(default_value_raw if has_default_value else current_value)
+        value_items = self._safe_value_items(parameter)
         return {
             "track_index": track_index,
             "device_index": device_index,
@@ -930,14 +936,15 @@ class AbletonMCP(ControlSurface):
             "chain_type_path": list(chain_type_path or []),
             "parameter_index": parameter_index,
             "is_device_on_parameter": parameter_index == 0,
-            "name": getattr(parameter, "name", ""),
-            "original_name": getattr(parameter, "original_name", getattr(parameter, "name", "")),
-            "value": self._safe_number(getattr(parameter, "value", 0.0)),
-            "default_value": self._safe_number(getattr(parameter, "default_value", getattr(parameter, "value", 0.0))),
-            "min": self._safe_number(getattr(parameter, "min", 0.0)),
-            "max": self._safe_number(getattr(parameter, "max", 1.0)),
-            "is_enabled": bool(getattr(parameter, "is_enabled", True)),
-            "is_quantized": bool(getattr(parameter, "is_quantized", False)),
+            "name": name,
+            "original_name": self._safe_attr(parameter, "original_name", name),
+            "value": current_value,
+            "default_value": default_value,
+            "has_default_value": has_default_value,
+            "min": self._safe_number(self._safe_attr(parameter, "min", 0.0)),
+            "max": self._safe_number(self._safe_attr(parameter, "max", 1.0)),
+            "is_enabled": bool(self._safe_attr(parameter, "is_enabled", True)),
+            "is_quantized": bool(self._safe_attr(parameter, "is_quantized", False)),
             "value_items": value_items,
         }
 
@@ -1162,8 +1169,8 @@ class AbletonMCP(ControlSurface):
         else:
             resolved_value = float(value)
 
-        minimum = float(getattr(parameter, "min", resolved_value))
-        maximum = float(getattr(parameter, "max", resolved_value))
+        minimum = float(self._safe_attr(parameter, "min", resolved_value))
+        maximum = float(self._safe_attr(parameter, "max", resolved_value))
         if resolved_value < minimum or resolved_value > maximum:
             raise AbletonMCPError(
                 "invalid_request",
@@ -1175,7 +1182,7 @@ class AbletonMCP(ControlSurface):
         if value_item is None or str(value_item).strip() == "":
             raise AbletonMCPError("invalid_request", "value_item must not be empty")
 
-        options = list(getattr(parameter, "value_items", []) or [])
+        options = self._safe_value_items(parameter)
         if not options:
             raise AbletonMCPError("unsupported_operation", "Parameter does not expose named value items")
 
@@ -1192,8 +1199,8 @@ class AbletonMCP(ControlSurface):
                 "Unknown value_item '{0}'. Available options: {1}".format(value_item, ", ".join([str(item) for item in options])),
             )
 
-        minimum = float(getattr(parameter, "min", 0.0))
-        maximum = float(getattr(parameter, "max", float(len(options) - 1)))
+        minimum = float(self._safe_attr(parameter, "min", 0.0))
+        maximum = float(self._safe_attr(parameter, "max", float(len(options) - 1)))
         if len(options) == 1:
             return minimum
 
@@ -1269,3 +1276,16 @@ class AbletonMCP(ControlSurface):
             return float(value)
         except Exception:
             return value
+
+    def _safe_attr(self, target, attr_name, default=None):
+        try:
+            return getattr(target, attr_name)
+        except Exception:
+            return default
+
+    def _safe_value_items(self, parameter):
+        raw_value_items = self._safe_attr(parameter, "value_items", [])
+        try:
+            return list(raw_value_items or [])
+        except Exception:
+            return []
