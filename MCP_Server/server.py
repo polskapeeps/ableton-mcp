@@ -484,9 +484,10 @@ def device_set_parameter(
     track_index: int,
     device_index: int,
     parameter_index: int,
-    value: float,
+    value: float | None = None,
+    value_item: str | None = None,
 ) -> dict[str, Any]:
-    """Set a specific device parameter."""
+    """Set a top-level device parameter by numeric value or quantized value label."""
 
     return invoke_ableton(
         "device_set_parameter",
@@ -494,6 +495,32 @@ def device_set_parameter(
         device_index=device_index,
         parameter_index=parameter_index,
         value=value,
+        value_item=value_item,
+    )
+
+
+@mcp.tool()
+def nested_device_set_parameter(
+    ctx: Context,
+    track_index: int,
+    device_path: list[int],
+    parameter_index: int,
+    value: float | None = None,
+    value_item: str | None = None,
+    chain_path: list[int] | None = None,
+    chain_type_path: list[str] | None = None,
+) -> dict[str, Any]:
+    """Set a nested device parameter by numeric value or quantized value label."""
+
+    return invoke_ableton(
+        "nested_device_set_parameter",
+        track_index=track_index,
+        device_path=device_path,
+        parameter_index=parameter_index,
+        value=value,
+        value_item=value_item,
+        chain_path=chain_path or [],
+        chain_type_path=chain_type_path or [],
     )
 
 

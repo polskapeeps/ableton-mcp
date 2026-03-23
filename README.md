@@ -128,7 +128,7 @@ Once the config file has been set on Claude, and the remote script is running in
 - Rename and recolor tracks, scenes, and clips
 - Launch and stop scenes and clips
 - Duplicate and delete tracks, scenes, clips, and devices with explicit confirmation
-- Adjust track arm, mute, solo, volume, pan, sends, tempo, metronome, and device parameters
+- Adjust track arm, mute, solo, volume, pan, sends, tempo, metronome, top-level device parameters, and nested chain device parameters
 - Add MIDI notes and update clip loop boundaries
 
 ## Example Commands
@@ -144,6 +144,8 @@ Here are some examples of what you can ask Claude to do:
 - "Rename clip slot 1 on track 2 to Intro Hook and set its loop from 0 to 8 bars"
 - "Turn the metronome on and set the tempo to 120 BPM"
 - "Set device parameter 5 on track 0 device 1 to 0.65"
+- "Inspect the rack on track 2, then set the nested synth filter cutoff by parameter index using its device_path and chain_path"
+- "Set a quantized stock Ableton parameter by label, like choosing an oscillator mode via value_item"
 - "Inspect the nested device chain on track 3 so you can suggest mastering moves based on the current stock Ableton chain"
 - "Delete track 4 with confirmation"
 

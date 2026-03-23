@@ -84,6 +84,7 @@ class AbletonMCP(ControlSurface):
             "clip_duplicate": self._cmd_clip_duplicate,
             "clip_delete": self._cmd_clip_delete,
             "device_set_parameter": self._cmd_device_set_parameter,
+            "nested_device_set_parameter": self._cmd_nested_device_set_parameter,
             "device_delete": self._cmd_device_delete,
         }
 
@@ -691,12 +692,15 @@ class AbletonMCP(ControlSurface):
         track_index = self._require_int(params, "track_index")
         device_index = self._require_int(params, "device_index")
         parameter_index = self._require_int(params, "parameter_index")
-        value = float(self._require_value(params, "value"))
 
         track = self._require_track(track_index)
         device = self._require_device(track, track_index, device_index)
         parameter = self._require_parameter(device, track_index, device_index, parameter_index)
-        self._set_parameter(parameter, value)
+        self._set_parameter(
+            parameter,
+            value=params.get("value"),
+            value_item=params.get("value_item"),
+        )
         return self._ok(
             "parameter",
             {
@@ -705,6 +709,41 @@ class AbletonMCP(ControlSurface):
                 "parameter_index": parameter_index,
             },
             self._parameter_state(parameter, track_index, device_index, parameter_index),
+        )
+
+    def _cmd_nested_device_set_parameter(self, params):
+        track_index = self._require_int(params, "track_index")
+        parameter_index = self._require_int(params, "parameter_index")
+        device_path = self._normalize_index_list(self._require_value(params, "device_path"), "device_path")
+        chain_path = self._normalize_index_list(params.get("chain_path", []), "chain_path")
+        chain_type_path = self._normalize_chain_types(params.get("chain_type_path", []))
+
+        track = self._require_track(track_index)
+        device = self._resolve_nested_device(track, device_path, chain_path, chain_type_path)
+        parameter = self._require_parameter(device, track_index, device_path[-1], parameter_index)
+        self._set_parameter(
+            parameter,
+            value=params.get("value"),
+            value_item=params.get("value_item"),
+        )
+        return self._ok(
+            "parameter",
+            {
+                "track_index": track_index,
+                "device_path": device_path,
+                "chain_path": chain_path,
+                "chain_type_path": chain_type_path,
+                "parameter_index": parameter_index,
+            },
+            self._parameter_state(
+                parameter,
+                track_index,
+                device_path[-1],
+                parameter_index,
+                device_path=device_path,
+                chain_path=chain_path,
+                chain_type_path=chain_type_path,
+            ),
         )
 
     def _cmd_device_delete(self, params):
@@ -1110,15 +1149,58 @@ class AbletonMCP(ControlSurface):
             raise AbletonMCPError("unsupported_operation", "{0} is not available".format(label))
         setattr(target, attr_name, value)
 
-    def _set_parameter(self, parameter, value):
-        minimum = float(getattr(parameter, "min", value))
-        maximum = float(getattr(parameter, "max", value))
-        if value < minimum or value > maximum:
+    def _set_parameter(self, parameter, value=None, value_item=None):
+        if value is None and value_item is None:
+            raise AbletonMCPError("invalid_request", "Provide either value or value_item")
+
+        if value is not None and value_item is not None:
+            raise AbletonMCPError("invalid_request", "Provide only one of value or value_item")
+
+        if value_item is not None:
+            resolved_value = self._resolve_parameter_value_item(parameter, value_item)
+        else:
+            resolved_value = float(value)
+
+        minimum = float(getattr(parameter, "min", resolved_value))
+        maximum = float(getattr(parameter, "max", resolved_value))
+        if resolved_value < minimum or resolved_value > maximum:
             raise AbletonMCPError(
                 "invalid_request",
-                "Value {0} is outside parameter range [{1}, {2}]".format(value, minimum, maximum),
+                "Value {0} is outside parameter range [{1}, {2}]".format(resolved_value, minimum, maximum),
             )
-        parameter.value = value
+        parameter.value = resolved_value
+
+    def _resolve_parameter_value_item(self, parameter, value_item):
+        if value_item is None or str(value_item).strip() == "":
+            raise AbletonMCPError("invalid_request", "value_item must not be empty")
+
+        options = list(getattr(parameter, "value_items", []) or [])
+        if not options:
+            raise AbletonMCPError("unsupported_operation", "Parameter does not expose named value items")
+
+        normalized_target = str(value_item).strip().lower()
+        matched_index = None
+        for index, option in enumerate(options):
+            if str(option).strip().lower() == normalized_target:
+                matched_index = index
+                break
+
+        if matched_index is None:
+            raise AbletonMCPError(
+                "invalid_request",
+                "Unknown value_item '{0}'. Available options: {1}".format(value_item, ", ".join([str(item) for item in options])),
+            )
+
+        minimum = float(getattr(parameter, "min", 0.0))
+        maximum = float(getattr(parameter, "max", float(len(options) - 1)))
+        if len(options) == 1:
+            return minimum
+
+        step_count = float(len(options) - 1)
+        span = maximum - minimum
+        if span == step_count:
+            return minimum + matched_index
+        return minimum + (span * (float(matched_index) / step_count))
 
     def _find_track_index(self, track):
         if track is None:
