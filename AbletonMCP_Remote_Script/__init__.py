@@ -521,7 +521,7 @@ class AbletonMCP(ControlSurface):
         track_index = self._require_int(params, "track_index")
         armed = bool(self._require_value(params, "armed"))
         track = self._require_track(track_index)
-        if not getattr(track, "can_be_armed", False):
+        if not bool(self._safe_attr(track, "can_be_armed", False)):
             raise AbletonMCPError("unsupported_operation", "Track cannot be armed")
         track.arm = armed
         return self._ok("track", {"track_index": track_index}, self._track_state(track, track_index))
@@ -907,25 +907,25 @@ class AbletonMCP(ControlSurface):
             "track_type": track_type,
             "track_index": track_index,
             "track_ref": self._track_ref(track_type, track_index),
-            "name": getattr(track, "name", ""),
-            "color": getattr(track, "color", None),
-            "is_midi_track": bool(getattr(track, "has_midi_input", False)),
-            "is_audio_track": bool(getattr(track, "has_audio_input", False)),
-            "can_be_armed": bool(getattr(track, "can_be_armed", False)),
-            "arm": bool(getattr(track, "arm", False)),
-            "mute": bool(getattr(track, "mute", False)),
-            "solo": bool(getattr(track, "solo", False)),
-            "is_foldable": bool(getattr(track, "is_foldable", False)),
-            "is_grouped": bool(getattr(track, "is_grouped", False)),
-            "playing_slot_index": int(getattr(track, "playing_slot_index", -1)),
-            "fired_slot_index": int(getattr(track, "fired_slot_index", -1)),
+            "name": self._safe_attr(track, "name", ""),
+            "color": self._safe_attr(track, "color", None),
+            "is_midi_track": bool(self._safe_attr(track, "has_midi_input", False)),
+            "is_audio_track": bool(self._safe_attr(track, "has_audio_input", False)),
+            "can_be_armed": bool(self._safe_attr(track, "can_be_armed", False)),
+            "arm": bool(self._safe_attr(track, "arm", False)),
+            "mute": bool(self._safe_attr(track, "mute", False)),
+            "solo": bool(self._safe_attr(track, "solo", False)),
+            "is_foldable": bool(self._safe_attr(track, "is_foldable", False)),
+            "is_grouped": bool(self._safe_attr(track, "is_grouped", False)),
+            "playing_slot_index": int(self._safe_attr(track, "playing_slot_index", -1)),
+            "fired_slot_index": int(self._safe_attr(track, "fired_slot_index", -1)),
             "volume": self._safe_number(self._safe_attr(volume_parameter, "value", 0.0)),
             "pan": self._safe_number(self._safe_attr(pan_parameter, "value", 0.0)),
             "sends": sends,
             "clip_slot_count": len(self._safe_attr(track, "clip_slots", []) or []),
             "device_count": len(self._safe_attr(track, "devices", []) or []),
-            "input_routing_type": self._routing_name(getattr(track, "input_routing_type", None)),
-            "output_routing_type": self._routing_name(getattr(track, "output_routing_type", None)),
+            "input_routing_type": self._routing_name(self._safe_attr(track, "input_routing_type", None)),
+            "output_routing_type": self._routing_name(self._safe_attr(track, "output_routing_type", None)),
         }
 
     def _scene_state(self, scene, scene_index):
