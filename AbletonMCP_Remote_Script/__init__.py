@@ -39,6 +39,7 @@ class AbletonMCP(ControlSurface):
         self.server_thread = None
         self.client_threads = []
         self.running = False
+        self._bridge_started = False
         self._song = self.song()
 
         self._command_handlers = {
@@ -92,11 +93,13 @@ class AbletonMCP(ControlSurface):
         }
 
         self.start_server()
-        self.show_message("AbletonMCP: Listening on port {0}".format(DEFAULT_PORT))
+        if self._bridge_started:
+            self.show_message("AbletonMCP: Listening on port {0}".format(DEFAULT_PORT))
 
     def disconnect(self):
         self.log_message("AbletonMCP disconnecting")
         self.running = False
+        self._bridge_started = False
 
         if self.server:
             try:
@@ -119,15 +122,22 @@ class AbletonMCP(ControlSurface):
             self.server.settimeout(1.0)
 
             self.running = True
+            self._bridge_started = True
             self.server_thread = threading.Thread(target=self._server_loop)
             self.server_thread.daemon = True
             self.server_thread.start()
             self.log_message("AbletonMCP bridge listening on {0}:{1}".format(HOST, DEFAULT_PORT))
         except Exception as exc:
+            self._bridge_started = False
+            self.running = False
             self.log_message("Error starting socket server: {0}".format(exc))
+            self.log_message(traceback.format_exc())
             self.show_message("AbletonMCP: failed to start bridge")
 
     def _server_loop(self):
+        if self.server is None:
+            return
+
         while self.running:
             try:
                 client, address = self.server.accept()
@@ -444,10 +454,10 @@ class AbletonMCP(ControlSurface):
         if not bool(self._safe_attr(item, "is_loadable", False)):
             raise AbletonMCPError("unsupported_operation", "Selected browser item is not loadable")
 
-        devices_before = [self._safe_attr(device, "name", "") for device in track.devices]
-        self._song.view.selected_track = track
+        devices_before = [self._safe_attr(device, "name", "") for device in self._safe_attr(track, "devices", []) or []]
+        self._select_track_for_browser_load(track)
         browser.load_item(item)
-        devices_after = [self._safe_attr(device, "name", "") for device in track.devices]
+        devices_after = [self._safe_attr(device, "name", "") for device in self._safe_attr(track, "devices", []) or []]
 
         state = {
             "track": self._track_state(track, track_index, track_type),
@@ -878,8 +888,11 @@ class AbletonMCP(ControlSurface):
         }
 
     def _track_state(self, track, track_index, track_type="tracks"):
+        mixer_device = self._safe_attr(track, "mixer_device", None)
+        volume_parameter = self._safe_attr(mixer_device, "volume", None)
+        pan_parameter = self._safe_attr(mixer_device, "panning", None)
         sends = []
-        for send_index, send in enumerate(track.mixer_device.sends):
+        for send_index, send in enumerate(self._safe_attr(mixer_device, "sends", []) or []):
             sends.append(
                 {
                     "send_index": send_index,
@@ -906,11 +919,11 @@ class AbletonMCP(ControlSurface):
             "is_grouped": bool(getattr(track, "is_grouped", False)),
             "playing_slot_index": int(getattr(track, "playing_slot_index", -1)),
             "fired_slot_index": int(getattr(track, "fired_slot_index", -1)),
-            "volume": self._safe_number(track.mixer_device.volume.value),
-            "pan": self._safe_number(track.mixer_device.panning.value),
+            "volume": self._safe_number(self._safe_attr(volume_parameter, "value", 0.0)),
+            "pan": self._safe_number(self._safe_attr(pan_parameter, "value", 0.0)),
             "sends": sends,
-            "clip_slot_count": len(track.clip_slots),
-            "device_count": len(track.devices),
+            "clip_slot_count": len(self._safe_attr(track, "clip_slots", []) or []),
+            "device_count": len(self._safe_attr(track, "devices", []) or []),
             "input_routing_type": self._routing_name(getattr(track, "input_routing_type", None)),
             "output_routing_type": self._routing_name(getattr(track, "output_routing_type", None)),
         }
@@ -994,14 +1007,14 @@ class AbletonMCP(ControlSurface):
             "is_enabled": bool(getattr(device, "is_enabled", True)),
             "can_have_chains": bool(getattr(device, "can_have_chains", False)),
             "can_have_drum_pads": bool(getattr(device, "can_have_drum_pads", False)),
-            "chain_count": len(getattr(device, "chains", [])),
-            "return_chain_count": len(getattr(device, "return_chains", [])),
-            "parameter_count": len(device.parameters),
+            "chain_count": len(self._safe_attr(device, "chains", []) or []),
+            "return_chain_count": len(self._safe_attr(device, "return_chains", []) or []),
+            "parameter_count": len(self._safe_attr(device, "parameters", []) or []),
         }
 
         if include_parameters:
             parameters = []
-            for parameter_index, parameter in enumerate(device.parameters):
+            for parameter_index, parameter in enumerate(self._safe_attr(device, "parameters", []) or []):
                 parameters.append(
                     self._parameter_state(
                         parameter,
@@ -1290,6 +1303,13 @@ class AbletonMCP(ControlSurface):
             "uri": self._safe_attr(item, "uri", None),
             "child_count": len(children or []),
         }
+
+    def _select_track_for_browser_load(self, track):
+        try:
+            self._song.view.selected_track = track
+        except Exception:
+            self.log_message("Could not select track before browser load")
+            self.log_message(traceback.format_exc())
 
     def _find_browser_item_by_uri(self, browser_or_item, uri, max_depth=10, current_depth=0):
         try:
